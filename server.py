@@ -13,7 +13,9 @@ RECALL_API_KEY = os.getenv('RECALL_API_KEY')
 RECALL_BASE = "https://us-west-2.recall.ai/api/v1"
 
 @app.post("/join_meet")
-async def join_meet(request: Request):
+async def join_meet(
+    request: Request
+):
     body = await request.json()
     meeting_url = body.get("meeting_url")
     if not meeting_url:
