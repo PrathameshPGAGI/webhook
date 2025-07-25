@@ -3,7 +3,7 @@ import aiohttp
 from gtts import gTTS
 import io
 
-RECALL_API_KEY = '6e40b90d3fe483ed5191535e8dcc258cad4af54f'
+RECALL_API_KEY = ''
 RECALL_BASE = "https://us-west-2.recall.ai/api/v1"
 MEETING_URL = "https://meet.google.com/rki-hymc-xmb"
 
