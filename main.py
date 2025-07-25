@@ -3,9 +3,9 @@ import aiohttp
 from gtts import gTTS
 import io
 
-RECALL_API_KEY = ''
+RECALL_API_KEY = '6e40b90d3fe483ed5191535e8dcc258cad4af54f'
 RECALL_BASE = "https://us-west-2.recall.ai/api/v1"
-MEETING_URL = "https://meet.google.com/rki-hymc-xmb"
+MEETING_URL = "https://meet.google.com/fku-wine-efx"
 
 async def main():
     headers = {"Authorization": f"Token {RECALL_API_KEY}", "Content-Type": "application/json"}
@@ -23,19 +23,21 @@ async def main():
           "recording_config": {
             "transcript": {
               "provider": {
-                "assembly_ai_streaming": {}
+                "deepgram_streaming": {}
               }
             },
             "realtime_endpoints": [
               {
                 "type": "webhook",
-                "url": "https://your-server.com/api/webhook/recall/transcript",  # <-- Replace with your webhook URL
+                "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",  # <-- Replace with your webhook URL
                 "events": ["transcript.data", "transcript.partial_data"]
               }
             ]
           }
         }
         r = await session.post(f"{RECALL_BASE}/bot", json=cfg, headers=headers)
+        # if r.status != 200:
+        #     print("Bot creation failed:", await r.text())
         r.raise_for_status()
         bot_id = (await r.json())["id"]
         print("Bot created:", bot_id)
@@ -67,21 +69,5 @@ async def main():
             print("✅ TTS audio played!")
         else:
             print("Playback failed:", await out.text())
-
-        # 7️⃣ Continuously fetch live transcript utterances (conversation)
-        for _ in range(20):  # Poll every 3 seconds for 1 minute
-            transcript_url = f"{RECALL_BASE}/transcript/retrieve/"
-            params = {"bot_id": bot_id}
-            tr_resp = await session.get(transcript_url, headers=headers, params=params)
-            if tr_resp.status == 200:
-                transcript_json = await tr_resp.json()
-                print("Full transcript response:", transcript_json)  # Debug print
-                utterances = transcript_json.get("utterances", [])
-                print("Live conversation (utterances):", utterances)
-            else:
-                print("Transcript fetch failed:", await tr_resp.text())
-            await asyncio.sleep(3)
-
-        await session.delete(f"{RECALL_BASE}/bot/{bot_id}", headers=headers)
 
 asyncio.run(main())
