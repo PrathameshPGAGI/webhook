@@ -1,13 +1,14 @@
 # Save as webhook_server.py
-from flask import Flask, request
+from fastapi import FastAPI, Request
+import uvicorn
 
-app = Flask(__name__)
+app = FastAPI()
 
-@app.route('/api/webhook/recall/transcript', methods=['POST'])
-def recall_webhook():
-    data = request.json
+@app.post("/api/webhook/recall/transcript")
+async def recall_webhook(request: Request):
+    data = await request.json()
     print("Received webhook:", data)
-    return '', 200
+    return {}
 
-if __name__ == '__main__':
-    app.run(port=5000)
+# if __name__ == "__main__":
+#     uvicorn.run("server:app", host="0.0.0.0", port=5000, reload=True)
