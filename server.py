@@ -13,7 +13,6 @@ async def recall_webhook(request: Request):
     words = data["data"]["data"]["words"]
     spoken_text = " ".join([w["text"] for w in words])
     print(f"{participant} said: {spoken_text}")
-    return {}
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=5000, reload=True)

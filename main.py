@@ -5,7 +5,7 @@ import io
 
 RECALL_API_KEY = '6e40b90d3fe483ed5191535e8dcc258cad4af54f'
 RECALL_BASE = "https://us-west-2.recall.ai/api/v1"
-MEETING_URL = "https://meet.google.com/fku-wine-efx"
+MEETING_URL = "https://meet.google.com/rki-hymc-xmb"
 
 async def main():
     headers = {"Authorization": f"Token {RECALL_API_KEY}", "Content-Type": "application/json"}
