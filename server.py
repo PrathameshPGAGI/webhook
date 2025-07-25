@@ -40,7 +40,7 @@ async def join_meet(request: Request):
                     "realtime_endpoints": [
                         {
                             "type": "webhook",
-                            "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
+                            "url": "https://webhook-vt1r.onrender.com/transcript",
                             "events": ["transcript.data", "transcript.partial_data"]
                         }
                     ]
@@ -78,7 +78,7 @@ async def join_meet(request: Request):
     return {"status": "Bot joining the meeting", "meeting_url": meeting_url}
 
 
-@app.post("/api/webhook/recall/transcript")
+@app.post("/transcript")
 async def recall_webhook(request: Request):
     data = await request.json()
     # Extract participant name
