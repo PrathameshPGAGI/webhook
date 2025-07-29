@@ -1,216 +1,196 @@
 import asyncio
-import argparse
-import os
-import sys
-from typing import Dict, Any
-from datetime import datetime
-import logging
+import websockets
 import json
 import base64
-import tempfile
+import os
 import numpy as np
-import torch
 import whisperx
-import soundfile as sf
-import websockets
-from websockets.server import serve
+import torch
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class AudioTranscriptionServer:
-    def __init__(self, port: int = 3456, model_name: str = "base.en", device: str = None):
+class RecallAudioReceiver:
+    def __init__(self, host='0.0.0.0', port=8000):
+        self.host = host
         self.port = port
-        self.model_name = model_name
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = None
-        self.align_model = None
-        self.metadata = None
-        self.clients = set()
+        self.output_dir = './audio_output'
+        self.transcripts_dir = './transcripts'
         
-        # Audio configuration
-        self.sample_rate = 16000  # 16 kHz as specified in the API
-        self.channels = 1  # Mono
-        self.sample_width = 2  # 16-bit = 2 bytes
+        # Create output directories if they don't exist
+        for dir_path in [self.output_dir, self.transcripts_dir]:
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
         
-        logger.info(f"Initializing server on port {port} with device: {self.device}")
+        # Initialize WhisperX
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.batch_size = 16
+        self.compute_type = "float16" if torch.cuda.is_available() else "int8"
         
-    async def initialize_whisperx(self):
-        """Initialize WhisperX model and alignment model"""
-        try:
-            logger.info(f"Loading WhisperX model: {self.model_name}")
-            self.model = whisperx.load_model(self.model_name, self.device, compute_type="float16" if self.device == "cuda" else "int8")
-            
-            # Load alignment model
-            logger.info("Loading alignment model...")
-            self.align_model, self.metadata = whisperx.load_align_model(language_code="en", device=self.device)
-            
-            logger.info("WhisperX models loaded successfully!")
-            
-        except Exception as e:
-            logger.error(f"Error initializing WhisperX: {e}")
-            raise
-    
-    def process_audio_buffer(self, audio_buffer: bytes) -> np.ndarray:
-        """Convert raw audio buffer to numpy array suitable for WhisperX"""
-        try:
-            # Convert bytes to numpy array (16-bit signed little-endian PCM)
-            audio_array = np.frombuffer(audio_buffer, dtype=np.int16)
-            
-            # Convert to float32 and normalize to [-1, 1] range
-            audio_float = audio_array.astype(np.float32) / 32768.0
-            
-            return audio_float
-            
-        except Exception as e:
-            logger.error(f"Error processing audio buffer: {e}")
-            return np.array([])
-    
-    async def transcribe_audio(self, audio_data: np.ndarray) -> str:
-        """Transcribe audio using WhisperX"""
-        try:
-            if len(audio_data) == 0:
-                return ""
-            
-            # Create temporary file for audio data
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                # Write audio data to temporary file
-                sf.write(temp_file.name, audio_data, self.sample_rate)
-                temp_file_path = temp_file.name
-            
-            try:
-                # Transcribe with WhisperX
-                result = self.model.transcribe(temp_file_path, batch_size=16)
-                
-                # Align the transcription
-                if self.align_model and len(result["segments"]) > 0:
-                    result = whisperx.align(result["segments"], self.align_model, self.metadata, temp_file_path, self.device, return_char_alignments=False)
-                
-                # Extract text from segments
-                transcript = ""
-                if "segments" in result:
-                    for segment in result["segments"]:
-                        if "text" in segment:
-                            transcript += segment["text"] + " "
-                
-                return transcript.strip()
-                
-            finally:
-                # Clean up temporary file
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-                    
-        except Exception as e:
-            logger.error(f"Error transcribing audio: {e}")
-            return ""
-    
-    async def handle_audio_message(self, message_data: Dict[str, Any]):
-        """Handle incoming audio message and transcribe it"""
-        try:
-            if message_data.get("event") == "audio_mixed_raw.data":
-                # Extract audio data
-                buffer_b64 = message_data["data"]["data"]["buffer"]
-                timestamp = message_data["data"]["data"]["timestamp"]
-                recording_id = message_data["data"]["recording"]["id"]
-                bot_id = message_data["data"]["bot"]["id"]
-                
-                # Decode base64 audio data
-                audio_buffer = base64.b64decode(buffer_b64)
-                
-                # Process audio buffer
-                audio_array = self.process_audio_buffer(audio_buffer)
-                
-                # Only transcribe if we have sufficient audio data
-                if len(audio_array) > self.sample_rate * 0.5:  # At least 0.5 seconds of audio
-                    transcript = await self.transcribe_audio(audio_array)
-                    
-                    if transcript:
-                        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        logger.info(f"[{timestamp_str}] Recording ID: {recording_id}")
-                        logger.info(f"[{timestamp_str}] Bot ID: {bot_id}")
-                        logger.info(f"[{timestamp_str}] Relative Timestamp: {timestamp.get('relative', 'N/A')}")
-                        logger.info(f"[{timestamp_str}] TRANSCRIPT: {transcript}")
-                        print(f"\n{'='*60}")
-                        print(f"RECORDING: {recording_id}")
-                        print(f"TIMESTAMP: {timestamp_str}")
-                        print(f"TRANSCRIPT: {transcript}")
-                        print(f"{'='*60}\n")
-                
-        except Exception as e:
-            logger.error(f"Error handling audio message: {e}")
-    
-    async def handle_client(self, websocket, path):
-        """Handle WebSocket client connection"""
-        client_address = websocket.remote_address
-        logger.info(f"New client connected: {client_address}")
+        # Load WhisperX model
+        print("Loading WhisperX model...")
+        self.model = whisperx.load_model("base.en", self.device, compute_type=self.compute_type)
+        print("WhisperX model loaded successfully")
         
-        self.clients.add(websocket)
+        # Audio buffering for 10-second transcription
+        self.audio_buffers = {}  # Store audio chunks per recording
+        self.buffer_duration = 10.0  # Transcribe every 10 seconds
+        self.sample_rate = 16000
+        self.target_samples = int(self.sample_rate * self.buffer_duration)  # 160,000 samples for 10 seconds
+    
+    async def handle_message(self, websocket, path):
+        """Handle incoming WebSocket messages"""
+        print(f"Client connected from {websocket.remote_address}")
         
         try:
             async for message in websocket:
                 try:
-                    # Parse JSON message
-                    message_data = json.loads(message)
+                    # Parse the JSON message
+                    ws_message = json.loads(message)
                     
-                    # Handle different message types
-                    if message_data.get("event") == "audio_mixed_raw.data":
-                        await self.handle_audio_message(message_data)
+                    if ws_message.get('event') == 'audio_mixed_raw.data':
+                        await self.process_audio_data(ws_message)
                     else:
-                        logger.info(f"Received message: {message_data.get('event', 'unknown')}")
+                        print(f"Unhandled message event: {ws_message.get('event')}")
                         
                 except json.JSONDecodeError as e:
-                    logger.error(f"JSON decode error: {e}")
+                    print(f"Error parsing JSON: {e}")
                 except Exception as e:
-                    logger.error(f"Error handling message: {e}")
+                    print(f"Error processing message: {e}")
                     
         except websockets.exceptions.ConnectionClosed:
-            logger.info(f"Client disconnected: {client_address}")
+            print("Client disconnected")
         except Exception as e:
-            logger.error(f"Error with client {client_address}: {e}")
-        finally:
-            self.clients.discard(websocket)
+            print(f"WebSocket error: {e}")
+    
+    async def process_audio_data(self, ws_message):
+        """Process incoming audio data"""
+        try:
+            data = ws_message['data']
+            recording_id = data['recording']['id']
+            buffer_data = data['data']['buffer']
+            timestamp = data['data']['timestamp']
+            
+            print(f"Received audio data for recording: {recording_id}")
+            print(f"Timestamp - Relative: {timestamp['relative']}, Absolute: {timestamp['absolute']}")
+            
+            # Decode the base64 audio data
+            encoded_buffer = base64.b64decode(buffer_data)
+            
+            # Convert raw PCM to numpy array for WhisperX
+            # Recall.ai sends 16-bit PCM, mono, 16kHz
+            audio_array = np.frombuffer(encoded_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+            
+            # Initialize buffer for this recording if it doesn't exist
+            if recording_id not in self.audio_buffers:
+                self.audio_buffers[recording_id] = {
+                    'chunks': [],
+                    'total_samples': 0,
+                    'last_timestamp': timestamp
+                }
+            
+            # Add audio chunk to buffer
+            self.audio_buffers[recording_id]['chunks'].append(audio_array)
+            self.audio_buffers[recording_id]['total_samples'] += len(audio_array)
+            self.audio_buffers[recording_id]['last_timestamp'] = timestamp
+            
+            # Check if we have 10 seconds of audio
+            if self.audio_buffers[recording_id]['total_samples'] >= self.target_samples:
+                await self.transcribe_accumulated_audio(recording_id)
+            
+            # Write to file (append mode to collect all audio chunks)
+            file_path = os.path.join(self.output_dir, f"{recording_id}.bin")
+            with open(file_path, 'ab') as f:
+                f.write(encoded_buffer)
+            
+            print(f"Audio data written to: {file_path} (Buffer: {self.audio_buffers[recording_id]['total_samples']}/{self.target_samples} samples)")
+            
+        except KeyError as e:
+            print(f"Missing key in message data: {e}")
+        except Exception as e:
+            print(f"Error processing audio data: {e}")
+    
+    async def transcribe_accumulated_audio(self, recording_id):
+        """Transcribe 10 seconds of accumulated audio"""
+        try:
+            buffer_info = self.audio_buffers[recording_id]
+            
+            # Combine all audio chunks
+            combined_audio = np.concatenate(buffer_info['chunks'])
+            
+            # Take exactly 10 seconds (160,000 samples)
+            audio_to_transcribe = combined_audio[:self.target_samples]
+            
+            print(f"Transcribing {len(audio_to_transcribe)/self.sample_rate:.1f} seconds of audio for recording: {recording_id}")
+            
+            # Run transcription in a thread to avoid blocking
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self.model.transcribe, audio_to_transcribe, self.batch_size
+            )
+            
+            if result["segments"]:
+                transcript_text = " ".join([segment["text"] for segment in result["segments"]])
+                
+                # Save transcript with timestamp
+                transcript_entry = {
+                    "recording_id": recording_id,
+                    "timestamp": buffer_info['last_timestamp'],
+                    "duration_seconds": 10.0,
+                    "transcript": transcript_text,
+                    "segments": result["segments"]
+                }
+                
+                # Append to transcript file
+                transcript_file = os.path.join(self.transcripts_dir, f"{recording_id}_transcript.jsonl")
+                with open(transcript_file, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(transcript_entry, ensure_ascii=False) + '\n')
+                
+                print(f"✅ 10-second Transcription: {transcript_text}")
+            else:
+                print("No speech detected in 10-second audio chunk")
+            
+            # Keep remaining audio for next transcription
+            remaining_audio = combined_audio[self.target_samples:]
+            self.audio_buffers[recording_id] = {
+                'chunks': [remaining_audio] if len(remaining_audio) > 0 else [],
+                'total_samples': len(remaining_audio),
+                'last_timestamp': buffer_info['last_timestamp']
+            }
+            
+        except Exception as e:
+            print(f"Error in 10-second transcription: {e}")
+    
+    async def transcribe_audio_chunk(self, audio_array, recording_id, timestamp):
+        """Legacy method - now handled by transcribe_accumulated_audio"""
+        pass
     
     async def start_server(self):
         """Start the WebSocket server"""
-        try:
-            # Initialize WhisperX models
-            await self.initialize_whisperx()
-            
-            logger.info(f"Starting WebSocket server on port {self.port}")
-            async with serve(self.handle_client, "0.0.0.0", self.port):
-                logger.info(f"WebSocket server is running on ws://0.0.0.0:{self.port}")
-                logger.info("Server is ready to receive audio streams from Recall.ai")
-                await asyncio.Future()  # Run forever
-                
-        except Exception as e:
-            logger.error(f"Error starting server: {e}")
-            raise
+        print(f"Starting WebSocket server on {self.host}:{self.port}")
+        print(f"Audio files will be saved to: {self.output_dir}")
+        print(f"Transcripts will be saved to: {self.transcripts_dir}")
+        print(f"🎙️  Transcribing every {self.buffer_duration} seconds of audio")
+        print("\nTo convert audio files to MP3, use:")
+        print("ffmpeg -f s16le -ar 16000 -ac 1 -i ./audio_output/{RECORDING_ID}.bin -c:a libmp3lame -q:a 2 ./audio_output/{RECORDING_ID}.mp3")
+        
+        async with websockets.serve(self.handle_message, self.host, self.port):
+            print(f"WebSocket server is running on ws://{self.host}:{self.port}")
+            # Keep the server running
+            await asyncio.Future()  # Run forever
 
-def main():
-    parser = argparse.ArgumentParser(description="Audio Transcription WebSocket Server")
-    parser.add_argument("--port", type=int, default=None, help="Port to run the server on")
-    parser.add_argument("--model", type=str, default="base.en", help="WhisperX model to use")
-    parser.add_argument("--device", type=str, default=None, help="Device to use (cpu/cuda)")
-    
-    args = parser.parse_args()
-    
-    # Use environment variable PORT if available (for Render deployment)
-    port = args.port or int(os.getenv("PORT", 3456))
-    
-    server = AudioTranscriptionServer(
-        port=port,
-        model_name=args.model,
-        device=args.device
-    )
+async def main():
+    """Main function to run the WebSocket receiver"""
+    receiver = RecallAudioReceiver()
     
     try:
-        asyncio.run(server.start_server())
+        await receiver.start_server()
     except KeyboardInterrupt:
-        logger.info("Server stopped by user")
+        print("\nServer stopped by user")
     except Exception as e:
-        logger.error(f"Server error: {e}")
-        sys.exit(1)
+        print(f"Server error: {e}")
 
 if __name__ == "__main__":
-    main()
+    # Install required packages if not already installed:
+    # pip install websockets
+    
+    print("Recall.ai Audio WebSocket Receiver")
+    print("=" * 40)
+    asyncio.run(main())
