@@ -4,3 +4,10 @@ python-multipart
 aiohttp
 gtts
 python-dotenv
+websockets
+whisperx
+torch
+torchaudio
+numpy
+librosa
+soundfile
