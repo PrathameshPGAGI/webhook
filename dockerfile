@@ -17,4 +17,4 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["python", "websocket.py"]
+CMD ["python", "-m", "uvicorn", "server:app", "--reload"]
