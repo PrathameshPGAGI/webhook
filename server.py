@@ -49,11 +49,6 @@ async def join_meet(
                     },
                     "realtime_endpoints": [
                         {
-                            "type": "webhook",
-                            "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
-                            "events": ["transcript.data", "transcript.partial_data"]
-                        },
-                        {
                             "type": "websocket",
                             "url": "wss://webhook-vt1r.onrender.com/ws",
                             "events": ["audio_mixed_raw.data"]
