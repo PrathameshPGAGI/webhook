@@ -103,17 +103,18 @@ async def websocket_audio_endpoint(websocket: WebSocket):
         while True:
             # Receive message from WebSocket
             message = await websocket.receive_text()
-            print(json.loads(message))
+
             try:
                 # Parse JSON message
                 ws_message = json.loads(message)
                 
                 if ws_message.get('event') == 'audio_mixed_raw.data':
-                    audio_collection.insert_one({
-                        "bot_id": ws_message['bot']['id'],
-                        "buffer": ws_message['data']['buffer'],
-                        "timestamp": ws_message['data']['timestamp']
-                    })
+                    # audio_collection.insert_one({
+                    #     "bot_id": ws_message['bot']['id'],
+                    #     "buffer": ws_message['data']['buffer'],
+                    #     "timestamp": ws_message['data']['timestamp']
+                    # })
+                    print(ws_message)
             
                 else:
                     print(f"Unhandled WebSocket event: {ws_message.get('event')}")
