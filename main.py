@@ -13,27 +13,33 @@ async def main():
         # 1️⃣ Create bot with silent MP3
         silent_mp3 = base64.b64encode(b'\x00'*1000).decode()
         cfg = {
-          "bot_name": "VoiceBot",
-          "meeting_url": MEETING_URL,
-          "automatic_audio_output": {
-            "in_call_recording": {
-              "data": {"kind": "mp3", "b64_data": silent_mp3}
-            }
-          },
-          "recording_config": {
-            "transcript": {
-              "provider": {
-                "deepgram_streaming": {}
-              }
+            "bot_name": "VoiceBot",
+            "meeting_url": meeting_url,
+            "automatic_audio_output": {
+                "in_call_recording": {
+                    "data": {"kind": "mp3", "b64_data": silent_mp3}
+                }
             },
-            "realtime_endpoints": [
-              {
-                "type": "webhook",
-                "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",  # <-- Replace with your webhook URL
-                "events": ["transcript.data", "transcript.partial_data"]
-              }
-            ]
-          }
+            "recording_config": {
+                "audio_mixed_raw": {},  # Add this - required for audio streaming
+                "transcript": {
+                    "provider": {
+                        "deepgram_streaming": {}
+                    }
+                },
+                "realtime_endpoints": [
+                    {
+                        "type": "websocket",
+                        "url": "wss://webhook-vt1r.onrender.com/ws",
+                        "events": ["audio_mixed_raw.data"]
+                    },
+                    {
+                        "type": "webhook",
+                        "url": "https://webhook-vt1r.onrender.com/transcript",
+                        "events": ["transcript.data", "transcript.partial_data"]
+                    }
+                ]
+            }
         }
         r = await session.post(f"{RECALL_BASE}/bot", json=cfg, headers=headers)
         # if r.status != 200:
