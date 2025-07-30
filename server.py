@@ -94,37 +94,49 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     """WebSocket endpoint to receive audio streams and store in MongoDB"""
     await websocket.accept()
     print(f"Audio WebSocket client connected from {websocket.client}")
-    
-    try:
-        while True:
-            # Receive message from WebSocket
-            message = await websocket.receive_text()
+    message = await websocket.receive_text()
+    ws_message = json.loads(message)
+                
+    if ws_message.get('event') == 'audio_mixed_raw.data':
+        audio_collection.insert_one({
+            "bot_id": ws_message['bot']['id'],
+            "buffer": ws_message['data']['buffer'],
+            "timestamp": ws_message['data']['timestamp']
+        })
 
-            try:
-                # Parse JSON message
-                ws_message = json.loads(message)
+    else:
+        print(f"Unhandled WebSocket event: {ws_message.get('event')}")
+        
+    # try:
+    #     while True:
+    #         # Receive message from WebSocket
+    #         message = await websocket.receive_text()
+
+    #         try:
+    #             # Parse JSON message
+    #             ws_message = json.loads(message)
                 
-                if ws_message.get('event') == 'audio_mixed_raw.data':
-                    audio_collection.insert_one({
-                        "bot_id": ws_message['bot']['id'],
-                        "buffer": ws_message['data']['buffer'],
-                        "timestamp": ws_message['data']['timestamp']
-                    })
+    #             if ws_message.get('event') == 'audio_mixed_raw.data':
+    #                 audio_collection.insert_one({
+    #                     "bot_id": ws_message['bot']['id'],
+    #                     "buffer": ws_message['data']['buffer'],
+    #                     "timestamp": ws_message['data']['timestamp']
+    #                 })
             
-                else:
-                    print(f"Unhandled WebSocket event: {ws_message.get('event')}")
+    #             else:
+    #                 print(f"Unhandled WebSocket event: {ws_message.get('event')}")
                     
-            except json.JSONDecodeError as e:
-                print(f"Error parsing WebSocket JSON: {e}")
-                await websocket.send_text(json.dumps({"error": "Invalid JSON format"}))
-            except Exception as e:
-                print(f"Error processing WebSocket message: {e}")
-                await websocket.send_text(json.dumps({"error": str(e)}))
+    #         except json.JSONDecodeError as e:
+    #             print(f"Error parsing WebSocket JSON: {e}")
+    #             await websocket.send_text(json.dumps({"error": "Invalid JSON format"}))
+    #         except Exception as e:
+    #             print(f"Error processing WebSocket message: {e}")
+    #             await websocket.send_text(json.dumps({"error": str(e)}))
                 
-    except WebSocketDisconnect:
-        print("Audio WebSocket client disconnected")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
+    # except WebSocketDisconnect:
+    #     print("Audio WebSocket client disconnected")
+    # except Exception as e:
+    #     print(f"WebSocket error: {e}")
 
 @app.get("/audio/{bot_id}")
 async def get_combined_audio(bot_id: str):
