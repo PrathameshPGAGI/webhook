@@ -90,10 +90,10 @@ async def join_meet(
                 print("Playback failed:", await out.text())
                 
             return bot_id
-    
-    return {"status": "Bot joining the meeting", "bot_id": run_bot(meeting_url)}
-
-
+        
+    bot_id = await run_bot(meeting_url)
+    return {"status": "Bot joining the meeting", "bot_id": bot_id}
+   
 @app.websocket("/ws")
 async def websocket_audio_endpoint(websocket: WebSocket):
     """WebSocket endpoint to receive audio streams and store in MongoDB"""
