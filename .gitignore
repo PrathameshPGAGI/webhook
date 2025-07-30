@@ -4,3 +4,4 @@ main.py
 server.py
 temp.py
 .gitignore
+.env
