@@ -208,18 +208,12 @@ async def play_audio(request: Request):
                 print("✅ TTS audio played successfully!")
                 return {
                     "status": "success",
-                    "message": "Audio played successfully",
-                    "bot_id": bot_id,
-                    "text": text
                 }
             else:
                 error_text = await response.text()
                 print(f"❌ Audio playback failed: {error_text}")
                 return {
                     "status": "error",
-                    "message": f"Failed to play audio: {error_text}",
-                    "bot_id": bot_id,
-                    "text": text
                 }
                 
     except Exception as e:
