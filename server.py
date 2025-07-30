@@ -25,6 +25,7 @@ async def join_meet(
 ):
     body = await request.json()
     meeting_url = body.get("meeting_url")
+    bot_id = ""
     if not meeting_url:
         return {"error": "meeting_url is required"}
 
@@ -48,11 +49,11 @@ async def join_meet(
                         }
                     },
                     "realtime_endpoints": [
-                        # {
-                        #     "type": "webhook",
-                        #     "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
-                        #     "events": ["transcript.data", "transcript.partial_data"]
-                        # },
+                        {
+                            "type": "webhook",
+                            "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
+                            "events": ["transcript.data", "transcript.partial_data"]
+                        },
                         {
                             "type": "websocket",
                             "url": "wss://webhook-vt1r.onrender.com/ws",
@@ -90,7 +91,7 @@ async def join_meet(
                 print("Playback failed:", await out.text())
 
     asyncio.create_task(run_bot(meeting_url))
-    return {"status": "Bot joining the meeting", "meeting_url": meeting_url}
+    return {"status": "Bot joining the meeting", "bot_id": bot_id}
 
 
 @app.websocket("/ws")
@@ -103,7 +104,7 @@ async def websocket_audio_endpoint(websocket: WebSocket):
         while True:
             # Receive message from WebSocket
             message = await websocket.receive_text()
-            print(json.loads(message))
+
             try:
                 # Parse JSON message
                 ws_message = json.loads(message)
