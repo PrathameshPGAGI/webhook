@@ -70,24 +70,24 @@ async def join_meet(
                     break
             print("Bot joined")
 
-            # Play TTS into Google Meet
-            text = 'Toing bot is turned on.'
-            tts = gTTS(text=text, lang='en', slow=False)
-            audio_buffer = io.BytesIO()
-            tts.write_to_fp(audio_buffer)
-            audio_bytes = audio_buffer.getvalue()
-            b64_audio = base64.b64encode(audio_bytes).decode()
-            payload = {"kind":"mp3", "b64_data": b64_audio}
-            out = await session.post(f"{RECALL_BASE}/bot/{bot_id}/output_audio/", json=payload, headers=headers)
-            if out.status == 200:
-                print("✅ TTS audio played!")
-            else:
-                print("Playback failed:", await out.text())
+            # # Play TTS into Google Meet
+            # text = 'Toing bot is turned on.'
+            # tts = gTTS(text=text, lang='en', slow=False)
+            # audio_buffer = io.BytesIO()
+            # tts.write_to_fp(audio_buffer)
+            # audio_bytes = audio_buffer.getvalue()
+            # b64_audio = base64.b64encode(audio_bytes).decode()
+            # payload = {"kind":"mp3", "b64_data": b64_audio}
+            # out = await session.post(f"{RECALL_BASE}/bot/{bot_id}/output_audio/", json=payload, headers=headers)
+            # if out.status == 200:
+            #     print("✅ TTS audio played!")
+            # else:
+            #     print("Playback failed:", await out.text())
                 
             return bot_id
         
     bot_id = await run_bot(meeting_url)
-    return {"status": "Bot joining the meeting", "bot_id": bot_id}
+    return {"status": "Bot joined the meeting", "bot_id": bot_id}
    
 @app.websocket("/ws")
 async def websocket_audio_endpoint(websocket: WebSocket):
