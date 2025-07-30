@@ -1,9 +1,12 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 import uvicorn
-import os, asyncio, base64, aiohttp
+import os, asyncio, base64, aiohttp, json
 from gtts import gTTS
 import io
 from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
+import numpy as np
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -11,6 +14,12 @@ app = FastAPI()
 
 RECALL_API_KEY = os.getenv('RECALL_API_KEY')
 RECALL_BASE = "https://us-west-2.recall.ai/api/v1"
+
+# MongoDB connection
+MONGO_URI = os.getenv('MONGO_URI')
+client = MongoClient(MONGO_URI)
+db = client['meetingbooking']
+audio_collection = db['audiostreams']
 
 @app.post("/join_meet")
 async def join_meet(
@@ -42,8 +51,13 @@ async def join_meet(
                     "realtime_endpoints": [
                         {
                             "type": "webhook",
-                            "url": "https://webhook-vt1r.onrender.com/transcript",
+                            "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
                             "events": ["transcript.data", "transcript.partial_data"]
+                        },
+                        {
+                            "type": "websocket",
+                            "url": "wss://webhook-vt1r.onrender.com/ws",
+                            "events": ["audio_mixed_raw.data"]
                         }
                     ]
                 }
@@ -80,6 +94,43 @@ async def join_meet(
     return {"status": "Bot joining the meeting", "meeting_url": meeting_url}
 
 
+@app.websocket("/ws")
+async def websocket_audio_endpoint(websocket: WebSocket):
+    """WebSocket endpoint to receive audio streams and store in MongoDB"""
+    await websocket.accept()
+    print(f"Audio WebSocket client connected from {websocket.client}")
+    
+    try:
+        while True:
+            # Receive message from WebSocket
+            message = await websocket.receive_text()
+            
+            try:
+                # Parse JSON message
+                ws_message = json.loads(message)
+                
+                if ws_message.get('event') == 'audio_mixed_raw.data':
+                    audio_collection.insert_one({
+                        "bot_id": ws_message['bot']['id'],
+                        "buffer": ws_message['data']['buffer'],
+                        "timestamp": ws_message['data']['timestamp']
+                    })
+            
+                else:
+                    print(f"Unhandled WebSocket event: {ws_message.get('event')}")
+                    
+            except json.JSONDecodeError as e:
+                print(f"Error parsing WebSocket JSON: {e}")
+                await websocket.send_text(json.dumps({"error": "Invalid JSON format"}))
+            except Exception as e:
+                print(f"Error processing WebSocket message: {e}")
+                await websocket.send_text(json.dumps({"error": str(e)}))
+                
+    except WebSocketDisconnect:
+        print("Audio WebSocket client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+
 @app.post("/transcript")
 async def recall_webhook(request: Request):
     data = await request.json()
@@ -91,4 +142,7 @@ async def recall_webhook(request: Request):
     print(f"{participant} said: {spoken_text}")
 
 if __name__ == "__main__":
+    print("Starting server with WebSocket audio endpoint...")
+    print(f"MongoDB connected to: {MONGO_URI}")
+    print("WebSocket endpoint available at: ws://localhost:5000/ws/audio")
     uvicorn.run("server:app", host="0.0.0.0", port=5000, reload=True)
