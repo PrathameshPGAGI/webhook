@@ -14,7 +14,7 @@ async def main():
         silent_mp3 = base64.b64encode(b'\x00'*1000).decode()
         cfg = {
             "bot_name": "VoiceBot",
-            "meeting_url": meeting_url,
+            "meeting_url": MEETING_URL,
             "automatic_audio_output": {
                 "in_call_recording": {
                     "data": {"kind": "mp3", "b64_data": silent_mp3}
