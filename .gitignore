@@ -5,3 +5,4 @@ server.py
 temp.py
 .gitignore
 .env
+main.py

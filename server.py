@@ -139,17 +139,28 @@ async def get_combined_audio(bot_id: str):
         if not audio_records:
             return {"error": f"No audio data found for bot_id: {bot_id}"}
         
-        # Combine all audio buffers into one
-        combined_buffer = ""
+        # Combine raw audio bytes (decode each buffer first, then combine)
+        combined_bytes = b""
         first_timestamp = audio_records[0]["timestamp"]
         last_timestamp = audio_records[-1]["timestamp"]
         
         for record in audio_records:
-            combined_buffer += record["buffer"]
+            try:
+                # Decode each base64 buffer to raw bytes
+                audio_chunk = base64.b64decode(record["buffer"])
+                combined_bytes += audio_chunk
+            except Exception as e:
+                print(f"Error decoding buffer: {e}")
+                continue
+        
+        # Encode the combined raw bytes back to base64
+        combined_buffer = base64.b64encode(combined_bytes).decode()
         
         return {
             "bot_id": bot_id,
             "combined_buffer": combined_buffer,
+            "total_records": len(audio_records),
+            "combined_bytes_length": len(combined_bytes),
             "first_timestamp": first_timestamp,
             "last_timestamp": last_timestamp
         }
@@ -157,6 +168,64 @@ async def get_combined_audio(bot_id: str):
     except Exception as e:
         print(f"Error retrieving audio data for bot_id {bot_id}: {e}")
         return {"error": f"Failed to retrieve audio data: {str(e)}"}
+    
+@app.post("/play_audio")
+async def play_audio(request: Request):
+    """Convert text to speech and play it through the bot in the meeting"""
+    try:
+        body = await request.json()
+        text = body.get("text")
+        bot_id = body.get("bot_id")
+        
+        if not text:
+            return {"error": "text is required"}
+        if not bot_id:
+            return {"error": "bot_id is required"}
+        
+        print(f"Playing audio for bot {bot_id}: {text}")
+        
+        # Generate TTS audio
+        tts = gTTS(text=text, lang='en', slow=False)
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_bytes = audio_buffer.getvalue()
+        
+        # Encode audio to base64
+        b64_audio = base64.b64encode(audio_bytes).decode()
+        
+        # Send audio to the bot
+        headers = {"Authorization": f"Token {RECALL_API_KEY}", "Content-Type": "application/json"}
+        payload = {"kind": "mp3", "b64_data": b64_audio}
+        
+        async with aiohttp.ClientSession() as session:
+            response = await session.post(
+                f"{RECALL_BASE}/bot/{bot_id}/output_audio/", 
+                json=payload, 
+                headers=headers
+            )
+            
+            if response.status == 200:
+                print("✅ TTS audio played successfully!")
+                return {
+                    "status": "success",
+                    "message": "Audio played successfully",
+                    "bot_id": bot_id,
+                    "text": text
+                }
+            else:
+                error_text = await response.text()
+                print(f"❌ Audio playback failed: {error_text}")
+                return {
+                    "status": "error",
+                    "message": f"Failed to play audio: {error_text}",
+                    "bot_id": bot_id,
+                    "text": text
+                }
+                
+    except Exception as e:
+        print(f"Error in play_audio endpoint: {e}")
+        return {"error": f"Failed to play audio: {str(e)}"}
+
 
 # @app.post("/transcript")
 # async def recall_webhook(request: Request):

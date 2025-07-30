@@ -1,193 +1,202 @@
-# Audio Transcription WebSocket Server
+# Recall.ai Meeting Bot
 
-This project contains a WebSocket server that receives real-time audio streams from Recall.ai bots and transcribes them using WhisperX.
+A FastAPI-based application that integrates with Recall.ai to join Google Meet calls, record audio streams, and provide text-to-speech functionality.
 
 ## Features
 
-- **Real-time Audio Processing**: Receives audio streams via WebSocket connections
-- **WhisperX Transcription**: Uses state-of-the-art WhisperX for accurate speech-to-text conversion
-- **Alignment Support**: Provides word-level alignment for better accuracy
-- **Multi-device Support**: Runs on both CPU and GPU (CUDA)
-- **Logging**: Comprehensive logging for debugging and monitoring
+- 🤖 **Automated Meeting Bot**: Join Google Meet calls programmatically
+- 🎵 **Real-time Audio Recording**: Stream and store audio data in MongoDB
+- 🗣️ **Text-to-Speech**: Play AI-generated speech in meetings
+- 💾 **Audio Export**: Download recorded meeting audio as WAV files
+- 🔗 **WebSocket Integration**: Real-time audio data streaming
+
+## Prerequisites
+
+- Python 3.8+
+- MongoDB database
+- Recall.ai API key
+- Required Python packages (see requirements.txt)
 
 ## Installation
 
-1. Install the required dependencies:
+1. **Clone the repository**
 ```bash
-pip install -r requirements.txt
+git clone <repository-url>
+cd recall.ai
 ```
 
-2. For GPU support (optional but recommended):
+2. **Install dependencies**
 ```bash
-# Install CUDA-compatible PyTorch
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install fastapi uvicorn requests numpy wave pymongo python-dotenv gtts aiohttp
 ```
+
+3. **Set up environment variables**
+Create a `.env` file in the project root:
+```env
+RECALL_API_KEY=your_recall_api_key_here
+MONGO_URI=mongodb://localhost:27017/
+```
+
+4. **Start MongoDB**
+Ensure MongoDB is running on your system.
 
 ## Usage
 
 ### Starting the Server
 
-Run the WebSocket server:
-
 ```bash
-python websocket.py
+python server.py
 ```
 
-**Command line options:**
-- `--port`: Port to run the server on (default: 3456)
-- `--model`: WhisperX model to use - options: `tiny`, `base`, `small`, `medium`, `large` (default: base)
-- `--device`: Device to use - `cuda` or `cpu` (auto-detected by default)
+The server will start on `http://localhost:5000` with the following endpoints:
 
-**Examples:**
+### API Endpoints
 
-```bash
-# Start server on default port with base model
-python websocket.py
+#### 1. Join Meeting
+```http
+POST /join_meet
+Content-Type: application/json
 
-# Start server on port 8080 with large model
-python websocket.py --port 8080 --model large
-
-# Force CPU usage
-python websocket.py --device cpu
-```
-
-### Using with Recall.ai
-
-1. **Start your WebSocket server** (as shown above)
-
-2. **Expose your server publicly** using ngrok or similar:
-```bash
-ngrok http 3456
-```
-
-3. **Create a bot with real-time endpoint** using Recall.ai API:
-
-```bash
-curl --request POST \
-     --url https://us-east-1.recall.ai/api/v1/bot/ \
-     --header "Authorization: $RECALLAI_API_KEY" \
-     --header "accept: application/json" \
-     --header "content-type: application/json" \
-     --data '{
-       "meeting_url": "https://meet.google.com/your-meeting-id",
-       "recording_config": {
-         "audio_mixed_raw": {},
-         "realtime_endpoints": [
-           {
-             "type": "websocket",
-             "url": "wss://your-ngrok-domain.ngrok-free.app",
-             "events": ["audio_mixed_raw.data"]
-           }
-         ]
-       }
-     }'
-```
-
-### Testing
-
-Run the test script to simulate audio data:
-
-```bash
-python test_websocket.py
-```
-
-This will send test audio data to your running WebSocket server.
-
-## Audio Format
-
-The server expects audio in the following format:
-- **Sample Rate**: 16 kHz
-- **Channels**: Mono (1 channel)
-- **Bit Depth**: 16-bit signed little-endian PCM
-- **Encoding**: Base64 encoded in the WebSocket message
-
-## Message Format
-
-The server expects messages in this format:
-
-```json
 {
-  "event": "audio_mixed_raw.data",
-  "data": {
-    "data": {
-      "buffer": "base64-encoded-audio-data",
-      "timestamp": {
-        "relative": 0.0,
-        "absolute": "2023-12-01T10:00:00Z"
-      }
-    },
-    "realtime_endpoint": {
-      "id": "endpoint-id",
-      "metadata": {}
-    },
-    "recording": {
-      "id": "recording-id", 
-      "metadata": {}
-    },
-    "bot": {
-      "id": "bot-id",
-      "metadata": {}
-    },
-    "audio_mixed_raw": {
-      "id": "audio-id",
-      "metadata": {}
-    }
-  }
+    "meeting_url": "https://meet.google.com/xxx-xxxx-xxx"
 }
 ```
 
-## Output
-
-The server will print transcriptions in real-time:
-
-```
-============================================================
-RECORDING: rec_123456789
-TIMESTAMP: 2023-12-01 10:30:15
-TRANSCRIPT: Hello, this is a test transcription
-============================================================
+**Response:**
+```json
+{
+    "status": "Bot joined the meeting",
+    "bot_id": "bot_12345"
+}
 ```
 
-## Performance Notes
+#### 2. Play Audio (Text-to-Speech)
+```http
+POST /play_audio
+Content-Type: application/json
 
-- **Model Selection**: 
-  - `tiny`: Fastest, least accurate
-  - `base`: Good balance of speed and accuracy (recommended)
-  - `small`: Better accuracy, slower
-  - `medium`: High accuracy, much slower
-  - `large`: Best accuracy, slowest
+{
+    "text": "Hello everyone, this is an AI assistant",
+    "bot_id": "bot_12345"
+}
+```
 
-- **GPU vs CPU**: GPU acceleration significantly improves performance, especially for larger models
+#### 3. Get Recorded Audio
+```http
+GET /audio/{bot_id}
+```
 
-- **Memory Usage**: Larger models require more memory. Monitor your system resources.
+Returns combined audio data for the specified bot in base64 format.
+
+#### 4. WebSocket Audio Stream
+```
+ws://localhost:5000/ws
+```
+
+Real-time audio data streaming endpoint.
+
+### Audio Export Tool
+
+Use the `audiosaver.py` script to download and save meeting audio:
+
+```bash
+python audiosaver.py
+```
+
+The script will:
+1. Prompt for a bot_id
+2. Fetch audio data from the server
+3. Convert to WAV format
+4. Save as `meeting_audio_{bot_id}.wav`
+
+## Project Structure
+
+```
+recall.ai/
+├── server.py          # Main FastAPI server
+├── audiosaver.py      # Audio export utility
+├── README.md          # This file
+└── .env              # Environment variables (create this)
+```
+
+## Configuration
+
+### Audio Settings
+- **Sample Rate**: 16 kHz
+- **Channels**: Mono (1 channel)
+- **Bit Depth**: 16-bit PCM
+- **Format**: WAV for exports, base64 for API transfers
+
+### MongoDB Schema
+Audio data is stored in the `meetingbooking.audiostreams` collection:
+```json
+{
+    "bot_id": "string",
+    "buffer": "base64_audio_data",
+    "timestamp": "iso_timestamp"
+}
+```
+
+## Audio Quality Analysis
+
+The audio export tool provides detailed analysis:
+- **Amplitude Analysis**: Max and average audio levels
+- **Duration Verification**: Compares expected vs actual audio length
+- **Data Integrity**: Checks for silent or corrupted audio
+- **Quality Warnings**: Alerts for potential audio issues
+
+## Error Handling
+
+The application includes comprehensive error handling for:
+- Network connectivity issues
+- Invalid audio data
+- MongoDB connection problems
+- Recall.ai API errors
+- WebSocket disconnections
+
+## Development
+
+### Running in Development Mode
+```bash
+python server.py
+```
+The server runs with auto-reload enabled for development.
+
+### Testing Audio Export
+```bash
+python audiosaver.py
+```
+Enter a valid bot_id when prompted to test audio retrieval.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **CUDA Out of Memory**: Use a smaller model or switch to CPU
-2. **Connection Issues**: Ensure the WebSocket server is running and accessible
-3. **Audio Quality**: Poor transcription quality may indicate audio encoding issues
+1. **Bot fails to join meeting**
+   - Verify Recall.ai API key
+   - Check meeting URL format
+   - Ensure meeting is accessible
 
-### Debugging
+2. **No audio data**
+   - Verify WebSocket connection
+   - Check MongoDB connectivity
+   - Confirm bot is recording
 
-Enable debug logging by modifying the logging level in `websocket.py`:
+3. **Audio quality issues**
+   - Check network stability
+   - Verify audio codec settings
+   - Monitor amplitude levels in export tool
 
-```python
-logging.basicConfig(level=logging.DEBUG)
-```
+4. **Silent audio output**
+   - Verify microphone permissions in the meeting
+   - Check participant audio levels
+   - Ensure bot has recording permissions
 
-## Dependencies
+## API Dependencies
 
-Key dependencies include:
-- `websockets`: WebSocket server implementation
-- `whisperx`: Advanced speech recognition
-- `torch`: PyTorch for deep learning
-- `numpy`: Numerical computations
-- `soundfile`: Audio file I/O
+- **Recall.ai**: Meeting bot integration and audio recording
+- **MongoDB**: Audio data storage
+- **Google TTS**: Text-to-speech generation
+- **FastAPI**: Web framework
+- **WebSocket**: Real-time communication
 
-See `requirements.txt` for the complete list.
-
-## License
-
-This project is provided as-is for demonstration purposes.
