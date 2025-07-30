@@ -48,11 +48,11 @@ async def join_meet(
                         }
                     },
                     "realtime_endpoints": [
-                        {
-                            "type": "webhook",
-                            "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
-                            "events": ["transcript.data", "transcript.partial_data"]
-                        },
+                        # {
+                        #     "type": "webhook",
+                        #     "url": "https://webhook-vt1r.onrender.com/api/webhook/recall/transcript",
+                        #     "events": ["transcript.data", "transcript.partial_data"]
+                        # },
                         {
                             "type": "websocket",
                             "url": "wss://webhook-vt1r.onrender.com/ws",
@@ -130,15 +130,15 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}")
 
-@app.post("/transcript")
-async def recall_webhook(request: Request):
-    data = await request.json()
-    # Extract participant name
-    participant = data["data"]["data"]["participant"].get("name", "Unknown")
-    # Extract spoken words and join them
-    words = data["data"]["data"]["words"]
-    spoken_text = " ".join([w["text"] for w in words])
-    print(f"{participant} said: {spoken_text}")
+# @app.post("/transcript")
+# async def recall_webhook(request: Request):
+#     data = await request.json()
+#     # Extract participant name
+#     participant = data["data"]["data"]["participant"].get("name", "Unknown")
+#     # Extract spoken words and join them
+#     words = data["data"]["data"]["words"]
+#     spoken_text = " ".join([w["text"] for w in words])
+#     print(f"{participant} said: {spoken_text}")
 
 if __name__ == "__main__":
     print("Starting server with WebSocket audio endpoint...")
