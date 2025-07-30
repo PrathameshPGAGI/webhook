@@ -25,7 +25,6 @@ async def join_meet(
 ):
     body = await request.json()
     meeting_url = body.get("meeting_url")
-    bot_id = ""
     if not meeting_url:
         return {"error": "meeting_url is required"}
 
@@ -89,9 +88,10 @@ async def join_meet(
                 print("✅ TTS audio played!")
             else:
                 print("Playback failed:", await out.text())
-
-    asyncio.create_task(run_bot(meeting_url))
-    return {"status": "Bot joining the meeting", "bot_id": bot_id}
+                
+            return bot_id
+    
+    return {"status": "Bot joining the meeting", "bot_id": run_bot(meeting_url)}
 
 
 @app.websocket("/ws")
