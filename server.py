@@ -5,8 +5,6 @@ from gtts import gTTS
 import io
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from datetime import datetime
-import numpy as np
 
 load_dotenv()  # Load environment variables from .env file
 
