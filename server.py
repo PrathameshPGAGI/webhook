@@ -41,6 +41,7 @@ async def join_meet(
                     }
                 },
                 "recording_config": {
+                    "audio_mixed_raw": {}, 
                     "transcript": {
                         "provider": {
                             "deepgram_streaming": {}
