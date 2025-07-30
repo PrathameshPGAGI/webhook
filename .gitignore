@@ -1,8 +1,0 @@
-cert.pem
-key.pem
-main.py
-server.py
-temp.py
-.gitignore
-.env
-main.py
