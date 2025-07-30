@@ -103,7 +103,7 @@ async def websocket_audio_endpoint(websocket: WebSocket):
         while True:
             # Receive message from WebSocket
             message = await websocket.receive_text()
-            
+            print(json.loads(message))
             try:
                 # Parse JSON message
                 ws_message = json.loads(message)
