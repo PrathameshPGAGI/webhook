@@ -131,6 +131,38 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}")
 
+@app.get("/audio/{bot_id}")
+async def get_combined_audio(bot_id: str):
+    """Retrieve all audio data for a bot_id, combine buffers in chronological order"""
+    try:
+        # Query MongoDB for all audio records for the given bot_id
+        cursor = audio_collection.find({"bot_id": bot_id}).sort("timestamp", 1)
+        
+        # Convert cursor to list and check if any records exist
+        audio_records = list(cursor)
+        
+        if not audio_records:
+            return {"error": f"No audio data found for bot_id: {bot_id}"}
+        
+        # Combine all audio buffers into one
+        combined_buffer = ""
+        first_timestamp = audio_records[0]["timestamp"]
+        last_timestamp = audio_records[-1]["timestamp"]
+        
+        for record in audio_records:
+            combined_buffer += record["buffer"]
+        
+        return {
+            "bot_id": bot_id,
+            "combined_buffer": combined_buffer,
+            "first_timestamp": first_timestamp,
+            "last_timestamp": last_timestamp
+        }
+        
+    except Exception as e:
+        print(f"Error retrieving audio data for bot_id {bot_id}: {e}")
+        return {"error": f"Failed to retrieve audio data: {str(e)}"}
+
 # @app.post("/transcript")
 # async def recall_webhook(request: Request):
 #     data = await request.json()
